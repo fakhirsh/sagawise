@@ -129,7 +129,7 @@ The process starts serving only if all of this holds, otherwise it logs the reas
 | 409 | The request is well formed but the state machine forbids it | every 409 code in §2–§4 |
 | 413 | The body exceeds `SAGAWISE_MAX_BODY_BYTES` (default 1 MiB) | an oversized `publish` payload; nothing is stored and the task stays as it was (phase 8) |
 | 500 | Sagawise's own infrastructure failed | Redis or Postgres error, timeout, unexpected reply |
-| 503 | Not ready | `/ready` while a dependency is unreachable |
+| 503 | Not ready | `/live` while a background loop (reaper, archive worker, webhook worker) has not ticked for 30 s; `/ready` and `/health` for that, or while Redis is unreachable. Postgres unreachable is reported as `degraded` with a 200: the API still serves and archives queue up (A2, A3). Phase 9, `docs/runbook.md` |
 
 **[DECISION D4]** Today's 403s become 409s: nothing about these is authorization. Today's "instance not found" is a 400 and becomes a 404.
 
@@ -154,6 +154,10 @@ Errors:
 ```
 
 Error codes are stable strings: `MISSING_PARAM`, `INVALID_PARAM`, `INVALID_BODY`, `UNAUTHORIZED`, `PAYLOAD_TOO_LARGE`, `WORKFLOW_NOT_FOUND`, `INSTANCE_NOT_FOUND`, `TASK_NOT_FOUND`, `TASK_NOT_PUBLISHED`, `TASK_ALREADY_PUBLISHED`, `TASK_ALREADY_COMPLETED`, `TASK_ALREADY_FAILED`, `INSTANCE_TERMINAL`, `INTERNAL`.
+
+### Probes (phase 9)
+
+`/live`, `/ready` and `/health` answer `{"status": "ok" | "degraded" | "unavailable", "checks": {<name>: "ok" | "error" | "stalled" | "not_running"}}`; `unavailable` is a 503, the other two a 200. `/live` checks only the loops (`reaper`, `archive_worker`, `webhook_worker`) so a store outage never restarts the process; `/ready` and `/health` add `redis` and `postgres`. The body carries no error detail. Every response also carries `X-Request-Id` (the caller's, or a generated one), which is the `request_id` of every log line the request produced.
 
 ### Authentication and CORS (phase 8)
 

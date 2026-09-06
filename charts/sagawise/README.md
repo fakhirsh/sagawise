@@ -94,6 +94,23 @@ adds a default-deny ingress policy whose `ingress` list names who may reach
 the API port. `auth.mode=off` serves an unauthenticated API for development
 clusters only. Reasoning: `docs/threat-model.md` in the repository.
 
+### Operations (chart 0.3.0)
+
+Logs are JSON lines (`logging.format`, `logging.level`). Prometheus
+metrics are served on a second container port (`metrics.port`, default
+9464) that is on the Service but not on the Ingress; enable
+`metrics.serviceMonitor` for a Prometheus Operator scrape target and
+`metrics.prometheusRule` for the alert rules (the same rules as
+`docs/alerts.yml`). With `networkPolicy.enabled`, list the scraper under
+`networkPolicy.metricsIngress`.
+
+`/live` checks that the reaper and the queue workers are ticking;
+`/ready` adds a Redis ping (Postgres down is "degraded", still 200, because
+archives queue up and the API keeps serving). The binary refuses to start
+against a Redis with `appendonly no` (`redisAOF`), since armed task
+deadlines live in Redis; the bundled Redis subchart has AOF on and a PVC.
+What to do when an alert fires: `docs/runbook.md` in the repository.
+
 ### Ingress
 
 This chart provides support for Ingress resources. If you have an ingress controller installed on your cluster, such as [nginx-ingress-controller](https://github.com/bitnami/charts/tree/main/bitnami/nginx-ingress-controller) you can utilize the ingress controller to serve your application.To enable Ingress integration, set `ingress.enabled` to `true` for the http ingress.
@@ -177,6 +194,14 @@ The following tables lists the configurable parameters of the Sagawise chart and
 | `image.tag`             | Tag for the Docker image                               | `latest`              |
 | `serviceAccount.create` | Whether to create a service account for the deployment | `false`               |
 | `serviceAccount.name`   | The name of the service account to use                 | `"nil`                |
+| `logging.format`        | `json` or `text`                                       | `json`                |
+| `logging.level`         | `debug`, `info`, `warn`, `error`                       | `info`                |
+| `metrics.enabled`       | Serve Prometheus metrics on `metrics.port`             | `true`                |
+| `metrics.port`          | Metrics container and Service port                     | `9464`                |
+| `metrics.serviceMonitor.enabled` | Create a Prometheus Operator ServiceMonitor   | `false`               |
+| `metrics.prometheusRule.enabled` | Create a PrometheusRule with the Sagawise alerts | `false`            |
+| `redisAOF`              | `require`, `warn` or `off` (startup check of Redis AOF) | `require`            |
+| `networkPolicy.metricsIngress` | Peers allowed to reach the metrics port        | `[]`                  |
 
 ### Ingress Parameters
 

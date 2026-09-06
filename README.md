@@ -220,6 +220,10 @@ The image supports the following environment variables:
 | `SAGAWISE_WEBHOOK_SECRET` | HMAC secret for signing failure webhooks (`X-Sagawise-Signature`). Empty = unsigned. | none |
 | `SAGAWISE_CORS_ORIGINS`   | Comma-separated exact browser origins allowed to call the API. Empty = none. | none |
 | `SAGAWISE_MAX_BODY_BYTES` | Largest accepted request body (K/M suffix). | `1M` |
+| `SAGAWISE_LOG_FORMAT`     | `json` (one object per line) or `text`. | `json` |
+| `SAGAWISE_LOG_LEVEL`      | `debug`, `info`, `warn` or `error`. | `info` |
+| `SAGAWISE_METRICS_ADDR`   | Prometheus `/metrics` listener; `off` disables it. Keep it internal. | `:9464` |
+| `SAGAWISE_REDIS_AOF`      | Startup check of Redis `appendonly`: `require` exits when it is off, `warn` logs, `off` skips. | `require` |
 ```
 
 Security details, including how receivers verify webhook signatures, are in [`docs/threat-model.md`](docs/threat-model.md).

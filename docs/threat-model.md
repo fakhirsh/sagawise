@@ -19,7 +19,8 @@ Assets, in order of value:
 |---|---|---|
 | Reporting services (via the SDKs or plain HTTP) | `/start_instance`, `/update_instance` | Trusted to report the truth about their own topics. Must present an API key. |
 | Operators, dashboards | `/workflows/list`, `/workflow_instances/list`, `/workflow_instances/get` | Read payloads. Must present an API key. A browser UI must also be on the CORS allowlist. |
-| Kubernetes / Docker | `/live`, `/ready`, `/health` | No key. They reveal only "up or not". |
+| Kubernetes / Docker | `/live`, `/ready`, `/health` | No key. They reveal only "up or not" per check, never an error string or an address. |
+| Prometheus | `/metrics` on `SAGAWISE_METRICS_ADDR` (default `:9464`) | No key. A separate listener, never on the API port, so it stays off the ingress; in Kubernetes a second container port gated by `networkPolicy.metricsIngress`. Reveals aggregate counts and latencies, no ids or payloads (phase 9). |
 | Sagawise itself → services | POST to each service's `failure_url` | The service must be able to tell a real delivery from a forged one. |
 | Redis, Postgres | internal | Reached over the network with credentials from Secrets. Not exposed by the API. |
 | Benchmark harness | `/debug/pprof` on `SAGAWISE_PPROF_ADDR` | Opt-in, never set in production. |
@@ -48,6 +49,7 @@ There is one role. Every key can do everything; per-service keys that may report
 | `SAGAWISE_CORS_ORIGINS` | empty (none) | Exact origins allowed to call from a browser. |
 | `SAGAWISE_WEBHOOK_SECRET` | empty (unsigned) | HMAC secret for failure webhooks. |
 | `SAGAWISE_MAX_BODY_BYTES` | `1M` | Cap on a request body. |
+| `SAGAWISE_METRICS_ADDR` | `:9464` | Prometheus listener; `off` disables. Keep it internal (phase 9). |
 
 Clients: `Authorization: Bearer <key>` on every request; the SDKs read `SAGAWISE_API_KEY`. Receivers: verify with `verify_signature` (SDKs) or `webhooksig.Verify` (Go) using the raw body.
 
@@ -56,6 +58,6 @@ Clients: `Authorization: Bearer <key>` on every request; the SDKs read `SAGAWISE
 - **Per-service authorization.** Every key can report on every topic. Binding a key to the services it may speak for needs the registry refactor that is already on the roadmap (services.json is a build-time file). Until then, one key per deployment, or one per service purely for rotation and audit.
 - **TLS.** Sagawise speaks plain HTTP. Terminate TLS at the ingress (the chart's ingress has a TLS block) or a mesh. Keys sent over plain HTTP on an untrusted network are readable.
 - **Rate limiting.** A key holder can start sagas until Redis is full. Bound it at the ingress, or add a per-key limiter in phase 9 when metrics exist to size it.
-- **Audit log.** Which key did what is not recorded; phase 9 structured logging is where it belongs.
-- **Redis and Postgres hardening** (AUTH, TLS, network isolation) beyond passing the password through a Secret: the operator's stores, the chart's subcharts, and phase 9 (AOF persistence).
+- **Audit log.** Phase 9's access log records every request (method, path, status, `request_id`, `instance_id`, the action and event names, the remote address; 401s included) but not *which* key was used, since every key is equal. Per-key attribution comes with per-service keys.
+- **Redis and Postgres hardening** (AUTH, TLS, network isolation) beyond passing the password through a Secret: the operator's stores and the chart's subcharts. Phase 9 added the AOF check (`SAGAWISE_REDIS_AOF`), which is about durability, not access.
 - **Secrets at rest** in `.env` and the example `.env` files: dev defaults, labelled as such.
